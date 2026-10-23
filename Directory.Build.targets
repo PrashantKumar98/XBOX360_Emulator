@@ -1,0 +1,18 @@
+<Project>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ProjectReference>
+      <SetConfiguration Condition="'$(Configuration)' == 'Release'">Configuration=Release Windows</SetConfiguration>
+      <SetConfiguration Condition="'$(Configuration)' == 'Debug'">Configuration=Debug Windows</SetConfiguration>
+      <SetPlatform Condition="'$(Platform)' == 'x64'">Platform=x64</SetPlatform>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+  <Target Name="RemoveVCLibsFromSDKReferences" BeforeTargets="ResolveSDKReferences">
+    <ItemGroup>
+      <SDKReference Remove="@(SDKReference)" Condition="'%(Identity)' == 'Microsoft.VCLibs, Version=14.0'" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -23,8 +23,9 @@
 // https://sourceforge.net/p/predef/wiki/OperatingSystems/
 // Original link: https://predef.sourceforge.net/preos.html
 
-// TO-DO: Only set this when needed!
+#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
 #define XE_PLATFORM_WINRT 1
+#endif
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
