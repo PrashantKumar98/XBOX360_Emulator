@@ -78,7 +78,14 @@ void UWPWindow::RequestPaintImpl() {
   OnPaint(); 
 }
 
-void UWPWindow::RequestCloseImpl() {}
+void UWPWindow::RequestCloseImpl() {
+  WindowDestructionReceiver destruction_receiver(this);
+  OnBeforeClose(destruction_receiver);
+  if (!destruction_receiver.IsWindowDestroyed()) {
+    OnAfterClose();
+  }
+  UWP::RequestAppExit();
+}
 
 void UWPWindow::FocusImpl() {}
 

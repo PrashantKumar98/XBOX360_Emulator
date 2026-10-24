@@ -8,12 +8,15 @@
  */
 
 #include "windowed_app_context_uwp.h"
+#include "XeniaUWP.h"
 
 namespace xe {
 namespace ui {
 UWPWindowedAppContext::UWPWindowedAppContext() {}
 UWPWindowedAppContext::~UWPWindowedAppContext() {}
-void UWPWindowedAppContext::PlatformQuitFromUIThread() {}
+void UWPWindowedAppContext::PlatformQuitFromUIThread() {
+  UWP::RequestAppExit();
+}
 void UWPWindowedAppContext::NotifyUILoopOfPendingFunctions() {}
 }  // namespace ui
 }  // namespace xe

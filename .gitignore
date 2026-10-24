@@ -113,3 +113,6 @@ recent.toml
 /xenia-canary-uwp/x64/
 /xenia-canary-uwp/xenia-canary-uwp/
 /xenia-canary-uwp/AppPackages/
+/xenia-canary-uwp/Staging/
+*.pfx
+*.p12

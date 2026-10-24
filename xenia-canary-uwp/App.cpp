@@ -6,6 +6,8 @@
 #include <fstream> 
 #include <sstream> 
 #include <string>
+#include <thread>
+#include <chrono>
 
 #include <winrt/Windows.ApplicationModel.Activation.h>
 #include <winrt/Windows.ApplicationModel.Core.h>
@@ -25,6 +27,7 @@
 #include "XeniaUWP.h"
 #include "UWPUtil.h"
 #include "WinRTKeyboard.h"
+#include "xenia/config.h"
 
 using namespace winrt;
 
@@ -53,6 +56,15 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
     void Initialize(CoreApplicationView const& v)
     {
       v.Activated({this, &App::OnActivate});
+
+      CoreApplication::Suspending([](auto const&, Windows::ApplicationModel::SuspendingEventArgs const& args) {
+        auto deferral = args.SuspendingOperation().GetDeferral();
+        config::SaveConfig();
+        deferral.Complete();
+      });
+
+      CoreApplication::Resuming([](auto const&, auto const&) {
+      });
     }
 
     void Load(hstring const&)
@@ -82,7 +94,7 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
 
         UWP::StartXenia();
 
-        while (true) {
+        while (UWP::IsAppRunning()) {
           CoreWindow::GetForCurrentThread().Dispatcher().ProcessEvents(
               CoreProcessEventsOption::ProcessAllIfPresent);
 
@@ -91,26 +103,30 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
-        CoreDispatcher dispatcher =
-            CoreWindow::GetForCurrentThread().Dispatcher();
-        dispatcher.ProcessEvents(CoreProcessEventsOption::ProcessUntilQuit);
+        UWP::StopXenia();
 
         if (!m_launchOnExit.empty()) {
           winrt::Windows::Foundation::Uri m_uri{m_launchOnExit};
           auto asyncOperation =
               winrt::Windows::System::Launcher::LaunchUriAsync(m_uri);
           asyncOperation.Completed(
-              [](winrt::Windows::Foundation::IAsyncOperation<bool> const&
-                     sender,
-                 winrt::Windows::Foundation::AsyncStatus const asyncStatus) {
+              [](winrt::Windows::Foundation::IAsyncOperation<bool> const&,
+                 winrt::Windows::Foundation::AsyncStatus const) {
                 CoreApplication::Exit();
-                return;
               });
+
+          while (asyncOperation.Status() == winrt::Windows::Foundation::AsyncStatus::Started) {
+            CoreWindow::GetForCurrentThread().Dispatcher().ProcessEvents(
+                CoreProcessEventsOption::ProcessAllIfPresent);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+          }
+        } else {
+          CoreApplication::Exit();
         }
     }
 
     void OnActivate(
-        const winrt::Windows::ApplicationModel::Core::CoreApplicationView& v,
+        const winrt::Windows::ApplicationModel::Core::CoreApplicationView&,
         const winrt::Windows::ApplicationModel::Activation::IActivatedEventArgs&
             args) {
         std::stringstream filePath;
@@ -167,6 +183,9 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView>
     void SetWindow(CoreWindow const & window)
     {
         window.CharacterReceived({this, &App::OnCharacterReceived});
+        window.Closed([](auto const&, auto const&) {
+          UWP::RequestAppExit();
+        });
     }
 };
 

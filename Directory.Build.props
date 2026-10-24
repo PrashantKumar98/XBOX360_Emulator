@@ -8,4 +8,11 @@
     <_CppCommonExtensionTargets></_CppCommonExtensionTargets>
     <ResolveNuGetPackages>false</ResolveNuGetPackages>
   </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>XE_PLATFORM_WINRT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)xenia-canary-uwp\Generated Files;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
 </Project>

@@ -2,6 +2,8 @@
 
 #include <string>
 #include <filesystem>
+#include <vector>
+#include <tuple>
 
 namespace winrt {
 class fire_and_forget;
@@ -15,6 +17,9 @@ class Window;
 
 namespace UWP {
 void StartXenia();
+void StopXenia();
+void RequestAppExit();
+bool IsAppRunning();
 void ExecutePendingFunctionsFromUIThread();
 void RegisterXeniaWindow(xe::ui::Window* window);
 void UpdateImGuiIO();

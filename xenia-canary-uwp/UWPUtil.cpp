@@ -3,8 +3,11 @@
 #include "xenia/emulator.h"
 
 #include <iostream>
-#include <fstream> 
+#include <fstream>
 #include <string>
+#include <filesystem>
+#include <chrono>
+#include <objbase.h>
 #include <ppl.h>
 #include <ppltasks.h>
 #include <agents.h>
@@ -112,12 +115,36 @@ void SelectFiles(std::function<void(std::vector<std::string>)> callback) {
 }
 
 bool TestPathPermissions(std::string path) { 
-  auto p = path +  "\\text.txt";
-  std::ofstream o(p);
-  bool success = o.good();
-  std::remove(p.c_str());
- 
-  return success;
+  GUID guid;
+  char guid_str[64];
+  if (CoCreateGuid(&guid) == S_OK) {
+    snprintf(guid_str, sizeof(guid_str), "\\.xenia_perm_test_%08lX%04hX%04hX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX.tmp",
+             guid.Data1, guid.Data2, guid.Data3,
+             guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+             guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+  } else {
+    snprintf(guid_str, sizeof(guid_str), "\\.xenia_perm_test_%llu.tmp",
+             static_cast<unsigned long long>(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
+  }
+  std::string test_path = path + guid_str;
+  std::error_code ec;
+  if (std::filesystem::exists(test_path, ec)) {
+    return false;
+  }
+  {
+    std::ofstream o(test_path, std::ios::out | std::ios::trunc);
+    if (!o.is_open() || !o.good()) {
+      return false;
+    }
+    o << "xenia_write_test";
+    if (o.fail()) {
+      o.close();
+      std::filesystem::remove(test_path, ec);
+      return false;
+    }
+  }
+  std::filesystem::remove(test_path, ec);
+  return !std::filesystem::exists(test_path, ec);
 }
 
 std::string GetLocalCache() {

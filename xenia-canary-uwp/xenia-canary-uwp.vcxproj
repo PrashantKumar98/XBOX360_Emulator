@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Label="Globals">
     <CppWinRTOptimized>true</CppWinRTOptimized>
@@ -81,7 +81,7 @@
     <AppxBundle>Always</AppxBundle>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
-    <PackageCertificateKeyFile>xenia-canary-uwp_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile Condition="'$(PackageCertificateKeyFile)' == '' and exists('$(MSBuildProjectDirectory)\xenia-canary-uwp_TemporaryKey.pfx')">xenia-canary-uwp_TemporaryKey.pfx</PackageCertificateKeyFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>xeniacanary</TargetName>
@@ -260,7 +260,7 @@
   <ItemGroup>
     <!-- Using Windows SDK 10.0.26100 CppWinRT 2.0.250303.5 -->
     <None Include="PropertySheet.props" />
-    <None Include="xenia-canary-uwp_TemporaryKey.pfx" />
+    <None Include="xenia-canary-uwp_TemporaryKey.cer" />
     <Text Include="readme.txt">
       <DeploymentContent>false</DeploymentContent>
     </Text>

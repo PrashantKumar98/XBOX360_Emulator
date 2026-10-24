@@ -4,6 +4,7 @@
 #include "WinRTKeyboard.h"
 
 #include <fstream>
+#include <atomic>
 
 #include "windowed_app_context_uwp.h"
 #include "surface_uwp.h"
@@ -40,8 +41,29 @@ static Emulator* s_emulator;
 static std::vector<std::string> s_paths;
 static std::vector<std::tuple<std::string, std::string>> s_games;
 static std::vector<std::string> s_scanned_paths;
+static std::atomic<bool> s_app_running{true};
+
+void UWP::RequestAppExit() {
+  s_app_running = false;
+}
+
+bool UWP::IsAppRunning() {
+  return s_app_running.load();
+}
+
+void UWP::StopXenia() {
+  if (app) {
+    app->InvokeOnDestroy();
+    app.reset();
+  }
+  if (app_context) {
+    app_context.reset();
+  }
+  xe::ShutdownWin32App();
+}
 
 void UWP::StartXenia() {
+  s_app_running = true;
   app_context = std::make_unique<ui::UWPWindowedAppContext>();
   app = xe::ui::GetWindowedAppCreator()(*app_context.get());
   
@@ -49,11 +71,7 @@ void UWP::StartXenia() {
 
   if (app->OnInitialize()) {
     RefreshPaths();
-    // to-do, remodel this so it doesn't instantly shutdown.
-    //app->InvokeOnDestroy();
   }
-
-  //xe::ShutdownWin32App();
 }
 
 void UWP::ExecutePendingFunctionsFromUIThread() {
