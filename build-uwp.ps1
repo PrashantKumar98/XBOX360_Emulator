@@ -2,6 +2,7 @@ param(
     [ValidateSet("Release", "Debug")]
     [string]$Configuration = "Release",
     [string]$Platform = "x64",
+    [string]$PlatformToolset = "",
     [string]$CertificatePath = "",
     [System.Security.SecureString]$CertificatePassword = $null,
     [switch]$SkipSigning,
@@ -34,7 +35,25 @@ if (-not $Msbuild -or -not (Test-Path $Msbuild)) {
         throw "MSBuild.exe could not be located. Please ensure Visual Studio or Build Tools is installed."
     }
 }
-Write-Host "[1/6] Using MSBuild: $Msbuild" -ForegroundColor Green
+if (-not $PlatformToolset) {
+    if ($env:PlatformToolset) {
+        $PlatformToolset = $env:PlatformToolset
+    } else {
+        $Detected = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Microsoft Visual Studio\*\*\MSBuild\Microsoft\VC\*\Platforms\x64\PlatformToolsets\*", `
+                                        "${env:ProgramFiles}\Microsoft Visual Studio\*\*\MSBuild\Microsoft\VC\*\Platforms\x64\PlatformToolsets\*" `
+                                  -Directory -ErrorAction SilentlyContinue |
+                    Select-Object -ExpandProperty Name -Unique |
+                    Where-Object { $_ -match "^v\d+$" } |
+                    Sort-Object -Descending |
+                    Select-Object -First 1
+        if ($Detected) {
+            $PlatformToolset = $Detected
+        } else {
+            $PlatformToolset = "v143"
+        }
+    }
+}
+Write-Host "[1/6] Using MSBuild: $Msbuild (PlatformToolset: $PlatformToolset)" -ForegroundColor Green
 
 # 2. Locate Windows SDK Tools
 $SdkBinRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
@@ -72,13 +91,22 @@ if (-not (Test-Path $WinRtBaseHeader) -or $Clean) {
 # 4. Dependency build & verification
 Write-Host "[4/6] Building dependencies and xenia-canary-uwp.vcxproj ($Configuration|$Platform)..." -ForegroundColor Green
 
+$MsbuildParams = @(
+    $VcxprojPath,
+    "/p:Configuration=$Configuration",
+    "/p:Platform=$Platform"
+)
+if ($PlatformToolset) {
+    $MsbuildParams += "/p:PlatformToolset=$PlatformToolset"
+}
+
 if ($Clean) {
     Write-Host "      Cleaning previous build outputs..." -ForegroundColor Yellow
-    & $Msbuild $VcxprojPath /t:Clean /p:Configuration=$Configuration /p:Platform=$Platform /p:PlatformToolset=v145 /m
+    & $Msbuild @MsbuildParams /t:Clean /m
 }
 
 # Build xenia-canary-uwp with project references enabled so MSBuild validates & builds dependencies
-& $Msbuild $VcxprojPath /p:Configuration=$Configuration /p:Platform=$Platform /p:PlatformToolset=v145 /p:AppxPackageSigningEnabled=false /p:BuildProjectReferences=true /p:OutputPath="bin\$Platform\$Configuration\" /m
+& $Msbuild @MsbuildParams /p:AppxPackageSigningEnabled=false /p:BuildProjectReferences=true /p:OutputPath="bin\$Platform\$Configuration\" /m
 if ($LASTEXITCODE -ne 0) {
     throw "MSBuild build failed with exit code $LASTEXITCODE."
 }
@@ -90,11 +118,20 @@ if (-not (Test-Path $TargetExe)) {
     throw "Target executable not found after build: $TargetExe"
 }
 
-# Explicitly validate critical engine static libraries
+# Explicitly validate all 30 engine static libraries referenced by xenia-canary-uwp.vcxproj
 $RequiredLibs = @(
-    "xenia-base.lib", "xenia-core.lib", "xenia-cpu.lib", "xenia-kernel.lib",
-    "xenia-gpu.lib", "xenia-gpu-d3d12.lib", "xenia-ui.lib", "xenia-ui-d3d12.lib",
-    "xenia-apu.lib", "xenia-apu-xaudio2.lib", "xenia-hid.lib", "xenia-hid-xinput.lib"
+    # Core Engine Modules
+    "xenia-base.lib", "xenia-core.lib", "xenia-cpu.lib", "xenia-cpu-backend-x64.lib",
+    "xenia-kernel.lib", "xenia-patcher.lib", "xenia-debug-ui.lib",
+    # Hardware Subsystems
+    "xenia-gpu.lib", "xenia-gpu-d3d12.lib", "xenia-gpu-null.lib",
+    "xenia-ui.lib", "xenia-ui-d3d12.lib",
+    "xenia-apu.lib", "xenia-apu-xaudio2.lib", "xenia-apu-nop.lib",
+    "xenia-hid.lib", "xenia-hid-xinput.lib", "xenia-hid-nop.lib",
+    # Third-Party Dependencies
+    "aes_128.lib", "capstone.lib", "fmt.lib", "dxbc.lib", "discord-rpc.lib",
+    "glslang-spirv.lib", "imgui.lib", "libavcodec.lib", "libavutil.lib",
+    "mspack.lib", "snappy.lib", "xxhash.lib"
 )
 foreach ($libName in $RequiredLibs) {
     $libPath = Join-Path $EngineLibDir $libName
@@ -102,7 +139,7 @@ foreach ($libName in $RequiredLibs) {
         throw "Required engine library missing: $libPath"
     }
 }
-Write-Host "      All critical engine libraries verified." -ForegroundColor Green
+Write-Host "      All 30 engine static libraries verified." -ForegroundColor Green
 
 # 5. Clean staging directory to prevent stale files entering package
 Write-Host "[5/6] Preparing clean staging layout for packaging..." -ForegroundColor Green
@@ -179,12 +216,12 @@ if (-not $SkipSigning) {
                 -NotAfter (Get-Date).AddYears(10) `
                 -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
 
-            $EmptyPassword = ConvertTo-SecureString -String "" -AsPlainText -Force
-            Export-PfxCertificate -Cert $Cert -FilePath $LocalPfx -Password $EmptyPassword | Out-Null
+            $EmptyPassword = New-Object System.Security.SecureString
+            Export-PfxCertificate -Cert $Cert -FilePath $LocalPfx -Password $EmptyPassword -Force | Out-Null
             $PublicCer = Join-Path $UwpProjectDir "xenia-canary-uwp_TemporaryKey.cer"
-            if (-not (Test-Path $PublicCer)) {
-                Export-Certificate -Cert $Cert -FilePath $PublicCer | Out-Null
-            }
+            # Always overwrite/export the public .cer alongside the generated PFX to prevent mismatched certificates
+            Export-Certificate -Cert $Cert -FilePath $PublicCer -Force | Out-Null
+            Write-Host "      Exported matching public certificate: $PublicCer" -ForegroundColor Green
             $ResolvedPfx = $LocalPfx
         }
     }
